@@ -19,7 +19,6 @@ package com.adamweigold.lemming
  * @author Adam J. Weigold <adam@adamweigold.com>
  * {@see Lemming}
  */
-@FunctionalInterface
 interface ExceptionStrategy {
     /**
      * Invoked when an exception is unhandled.
