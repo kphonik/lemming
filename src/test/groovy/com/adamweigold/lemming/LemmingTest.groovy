@@ -12,80 +12,190 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.adamweigold.lemming
 
 import java.util.concurrent.Callable
 import java.util.concurrent.CancellationException
+import java.util.concurrent.Executors
 
 /**
  * Created by adam on 1/31/2015.
  */
 class LemmingTest extends GroovyTestCase {
-    void testInvoke(){
-        Lemming<Foo> lemming = new Lemming()
-        lemming = lemming.add({
-            return Foo
+    void testInvoke() {
+        Lemming<Collected> lemming = new Lemming()
+        lemming = lemming.add( {
+            Collected
         } as Callable)
         lemming = lemming.add {
-            return Foo
+            Collected
         }
-        Collection<Foo> foos = lemming.invoke()
-        assertEquals 2, foos.size()
+        Collection<Collected> foos = lemming.collect()
+        assert 2 == foos.size()
     }
 
-    void testDefaultExceptionHandling(){
-        Lemming<Foo> lemming = new Lemming()
-        lemming.add ({
+    void testDefaultExceptionHandling() {
+        Lemming<Collected> lemming = new Lemming()
+        lemming.add ( {
             throw new RuntimeException()
         } as Callable)
-        Collection<Foo> foos = lemming.invoke()
-        assertTrue foos.empty
+        Collection<Collected> foos = lemming.collect()
+        assert foos.empty
     }
 
-    void testFailAllExceptionHandling(){
-        shouldFail(RuntimeException){
-            Lemming.create().add{
+    void testFailAllExceptionHandling() {
+        shouldFail(RuntimeException) {
+            Lemming.makeLemming().add {
                 throw new RuntimeException()
-            }.failOnAnyException().invoke()
+            }.failOnAnyException().collect()
         }
 
     }
 
-    void testClosureExceptionHandling(){
-        shouldFail(FooException){
-            Lemming.create().add{
+    void testClosureExceptionHandling() {
+        shouldFail(FooException) {
+            Lemming.makeLemming().add {
                 throw new RuntimeException()
             }.setExceptionStrategy {
                 throw new FooException()
-            }.invoke()
+            }.collect()
         }
     }
 
-    void testCollectionReturned(){
-        def results = Lemming.create().add {
-            return new Foo()
+    void testCollectionReturned() {
+        def results = Lemming.makeLemming().add {
+            Collected
         }.add {
-            return [new Foo(), new Foo()]
-        }.invoke()
-        assertEquals 3, results.size()
+            [Collected, Collected]
+        }.collect()
+        assert 3 == results.size()
     }
 
-    void testDefaultTimeout(){
-        Lemming.create().add {
+    void testDefaultTimeout() {
+        def results = Lemming.makeLemming().add {
             Thread.sleep(10000L)
-        }.setTimeout(10L).invoke()
+        }.setTimeout(10L).collect()
+        assert 0 == results.size()
     }
 
-    void testFailAllTimeout(){
-        shouldFail(CancellationException){
-            Lemming.create().add {
+    void testFailAllTimeout() {
+        shouldFail(CancellationException) {
+            Lemming.makeLemming().add {
                 Thread.sleep(10000L)
-            }.setTimeout(10L).failOnAnyTimeout().invoke()
+            }.setTimeout(10L).failOnAnyTimeout().collect()
         }
     }
 
-    class Foo {}
+    void testCustomExecutorNotShutdown() {
+        def executorService = Executors.newCachedThreadPool()
+        try {
+            Lemming.makeLemming().add {
+                Collected
+            }.setExecutor(executorService).collect()
+            assert !executorService.isShutdown()
+        } finally {
+            executorService.shutdown()
+        }
+    }
 
-    class FooException extends RuntimeException{}
+    void testCustomExecutorShutdown() {
+        def executorService = Executors.newCachedThreadPool()
+        try {
+            Lemming.makeLemming().add {
+                Collected
+            }.setExecutor(executorService).setShutdownExecutorService(true).collect()
+            assert executorService.isShutdown()
+        } finally {
+            executorService.shutdown()
+        }
+    }
+
+    void testThreadName() {
+        List<String> results = Lemming.makeLemming().add {
+            Thread.currentThread().name
+        }.setThreadNameFormat('TestFormat-%s').collect()
+        assert results.first().startsWith('TestFormat-')
+    }
+
+    void testThreadPriority() {
+        List<Integer> results = Lemming.makeLemming().add {
+            Thread.currentThread().priority
+        }.setPriority(1).collect()
+        assert 1 == results.first()
+    }
+
+    void testThreadUnderMin() {
+        shouldFail(IllegalArgumentException) {
+            Lemming.makeLemming().setPriority(Thread.MIN_PRIORITY - 1)
+        }
+    }
+
+    void testThreadAboveMax() {
+        shouldFail(IllegalArgumentException) {
+            Lemming.makeLemming().setPriority(Thread.MAX_PRIORITY + 1)
+        }
+    }
+
+    void testThreadDaemon() {
+        List<Boolean> results = Lemming.makeLemming().add {
+            Thread.currentThread().isDaemon()
+        }.setDaemon(true).collect()
+        assert results.first()
+    }
+
+    void testNotThreadDaemon() {
+        List<Boolean> results = Lemming.makeLemming().add {
+            Thread.currentThread().isDaemon()
+        }.setDaemon(false).collect()
+        assert !results.first()
+    }
+
+    void testThreadCount() {
+        List<String> results = Lemming.makeLemming().add {
+            Thread.currentThread().name
+        }.add {
+            Thread.currentThread().name
+        }.setThreadCount(1).collect()
+        assert 2 == results.size()
+        results.each { result ->
+            assert result.endsWith('-1')
+        }
+    }
+
+    void testBackingThreadFactory() {
+        List<String> results = Lemming.makeLemming().add {
+            Thread.currentThread().name
+        }.setThreadFactory { runnable ->
+            def thread = new Thread(runnable)
+            thread.setName('CustomThreadFactory')
+            thread
+        }.collect()
+        assert 'CustomThreadFactory' == results.first()
+    }
+
+    void testQuietlyHandleAllExceptions() {
+        def results = Lemming.makeLemming().add {
+            throw new RuntimeException()
+        }.quietlyHandleAllExeptions().collect()
+        assert results.empty
+    }
+
+    void testQuietlyHandleAllTimeouts() {
+        def results = Lemming.makeLemming().add {
+            Thread.sleep(10000L)
+        }.setTimeout(1L).quietlyHandleAllTimeouts().collect()
+        assert results.empty
+    }
+
+    void testCustomTimeoutStrategy() {
+        shouldFail(FooException) {
+            Lemming.makeLemming().add {
+                Thread.sleep(10000L)
+            }.setTimeout(1L).setTimeoutStrategy { exception ->
+                throw new FooException()
+            }.collect()
+        }
+    }
+
+    class FooException extends RuntimeException { }
 }

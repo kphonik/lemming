@@ -12,18 +12,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/**
+ * Provides an easy to use builder API for collecting results from multiple threads in Java or Groovy.
+ * @author Adam J. Weigold <adam@adamweigold.com>
+ */
 package com.adamweigold.lemming
 
-/**
- * Shared interface for handling exceptions thrown under various scenarios.
- * @author Adam J. Weigold <adam@adamweigold.com>
- * {@see Lemming}
- */
-@FunctionalInterface
-interface ExceptionStrategy {
-    /**
-     * Invoked when an exception is unhandled.
-     * @param e the unhandled exception.
-     */
-    void handle(Throwable e)
-}

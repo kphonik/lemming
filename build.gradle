@@ -1,9 +1,32 @@
 apply plugin: 'groovy'
+apply plugin: 'project-report'
+apply plugin: 'codenarc'
 
+buildscript {
+    repositories {
+        maven {
+            name = 'BintrayJCenter'
+            url = 'http://jcenter.bintray.com'
+        }
+    }
+    dependencies {
+        classpath 'us.carrclan.david.gradle:gradle-site-plugin:0.2.0'
+    }
+}
+apply plugin: 'site'
 version = '1.0-alpha'
 
 repositories {
     mavenCentral()
+}
+
+sourceSets {
+    site {
+        resources {
+            srcDir 'build/docs'
+            srcDir 'build/reports'
+        }
+    }
 }
 
 dependencies {

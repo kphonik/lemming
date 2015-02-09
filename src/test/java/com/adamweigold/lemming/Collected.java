@@ -12,18 +12,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.adamweigold.lemming
+package com.adamweigold.lemming;
 
 /**
- * Shared interface for handling exceptions thrown under various scenarios.
- * @author Adam J. Weigold <adam@adamweigold.com>
- * {@see Lemming}
+ * Created by adam on 2/8/2015.
  */
-@FunctionalInterface
-interface ExceptionStrategy {
-    /**
-     * Invoked when an exception is unhandled.
-     * @param e the unhandled exception.
-     */
-    void handle(Throwable e)
+public class Collected {
 }
