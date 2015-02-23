@@ -117,6 +117,22 @@ Lemming.makeLemming().add {
 }.setExecutor(executorService).collect()
 ```
 
+If you want to control the thread pool size, Lemming allows you to specify the size, that way you don't have to spin 10,000 threads if you specify 10,000 callables
+
+```groovy
+void testThreadCount() {
+    List<String> results = Lemming.makeLemming().add {
+        Thread.currentThread().name
+    }.add {
+        Thread.currentThread().name
+    }.setThreadCount(1).collect()
+    assert 2 == results.size()
+    results.each { result ->
+        assert result.endsWith('-1')
+    }
+}
+```
+
 Lemming will also allow you to override the default shutdown policy of the ExecutorService as well (whether using the auto created ExecutorService or a provided one)
 
 ```groovy
