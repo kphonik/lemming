@@ -49,7 +49,6 @@ class LemmingTest extends GroovyTestCase {
                 throw new RuntimeException()
             }.failOnAnyException().collect()
         }
-
     }
 
     void testClosureExceptionHandling() {
