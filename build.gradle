@@ -34,10 +34,17 @@ repositories {
 }
 
 sourceSets {
+    readmeSource {
+        resources {
+            srcDir "$projectDir"
+            include 'README.md'
+        }
+    }
     site {
         resources {
             srcDir 'build/docs'
             srcDir 'build/reports'
+            source readmeSource.resources
         }
     }
 }

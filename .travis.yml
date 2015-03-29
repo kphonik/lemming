@@ -1,3 +1,9 @@
 language: java
 after_success:
-- ./gradlew jacocoTestReport coveralls
+- "./gradlew jacocoTestReport coveralls"
+- "./gradlew groovydoc buildSite"
+- ".travis/deploy_ghpages.sh"
+env:
+  global:
+    GH_REF: github.com/aweigold/lemming.git
+    secure: b+gtcCpc93yHgf7i28ezZxRjZY0vXi8lhLoiWqPnmWqg3r0SztRhq6SSMu6yFTX/FIctGD2fbVhxsqLU+hCeW+tf2nykrFPZ9I6QJflBPctibj22Jd07LB3UkFv4BKY1Tj3VqPPrRhAg5E5OLkpc58Y5ija4zdoYldD/+NGUpCs=

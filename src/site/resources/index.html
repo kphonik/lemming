@@ -21,9 +21,11 @@
         <meta name="description" content="" />
         <meta http-equiv="content-language" content="en" />
 
-        <link href="//maxcdn.bootstrapcdn.com/bootswatch/3.3.2/yeti/bootstrap.min.css" rel="stylesheet">
+        <link href="//maxcdn.bootstrapcdn.com/bootswatch/3.3.4/spacelab/bootstrap.min.css" rel="stylesheet">
 
         <link href="http://yandex.st/highlightjs/7.5/styles/github.min.css" rel="stylesheet" />
+
+        <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/default.min.css">
 
         <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
         <!--[if lt IE 9]>
@@ -33,7 +35,6 @@
         <link rel="author" href="http://www.adamweigold.com"/>
     </head>
 <body>
-
     <div class="navbar navbar-default">
         <div class="container">
             <div class="navbar-header">
@@ -70,9 +71,34 @@
             <h1>Lemming</h1>
             <p>A simple to use builder api for asynchronously collecting results in Java or Groovy.</p>
         </div>
+        <div id="README">
+        </div>
     </div>
     <a href="https://github.com/aweigold/lemming"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/e7bbb0521b397edbd5fe43e7f760759336b5e05f/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f677265656e5f3030373230302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_green_007200.png"></a>
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/marked/0.3.2/marked.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/highlight.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/languages/groovy.min.js"></script>
+    <script type="text/javascript">
+        var req = new XMLHttpRequest();
+        req.onload = function() {
+            var markdownString = this.responseText;
+
+            marked.setOptions({
+               highlight: function (code, lang) {
+                   if (lang == undefined){
+                       return code;
+                   }
+                   return hljs.highlight(lang, code).value;
+               }
+            });
+
+            var readmeNode = document.getElementById('README');
+            readmeNode.innerHTML = marked(markdownString);
+        };
+        req.open('GET', 'README.md', false);
+        req.send();
+    </script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
     <script>
         (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -82,7 +108,6 @@
 
         ga('create', 'UA-59439467-1', 'auto');
         ga('send', 'pageview');
-
     </script>
 </body>
 </html>
