@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>Lemming.groovy</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">lemming</a> &gt; <a href="index.source.html" class="el_package">com.adamweigold.lemming</a> &gt; <span class="el_source">Lemming.groovy</span></div><h1>Lemming.groovy</h1><pre class="source lang-java linenums">/*
+ * Copyright 2015 Adam J. Weigold.
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.adamweigold.lemming
+
+import java.util.concurrent.Callable
+import java.util.concurrent.CancellationException
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
+
+/**
+ * Provides a builder pattern for asynchronously collecting results from one or more {@link Callable}s.
+ * &lt;p&gt;
+ * This can be invoked in the following manner from Java:
+ * &lt;pre&gt;
+ * &lt;code&gt;Lemming{@code &lt;Collected&gt;} lemming = Lemming.makeLemming();
+ * Collection{@code &lt;Collected&gt;} results = lemming.add(new Callable{@code &lt;Collected&gt;}() {
+ *     public Collected call() throws Exception {
+ *       return new Collected();
+ *     }
+ *   }
+ * ).add(new Callable{@code &lt;Collection&lt;Collected&gt;&gt;}() {
+ *     public Collection{@code &lt;Collected&gt;} call() throws Exception {
+ *       return Arrays.asList(new Collected(), new Collected());
+ *     }
+ * }).collect();&lt;/code&gt;
+ * &lt;/pre&gt;
+ * Since {@link Callable} is a {@link FunctionalInterface}, this can be simplified in Groovy:
+ * &lt;pre&gt;
+ * &lt;code&gt;def results = Lemming.makeLemming().add {
+ *   new Collected()
+ * }.add {
+ *   [new Collected(), new Collected()]
+ * }.collect()&lt;/code&gt;
+ * &lt;/pre&gt;
+ *
+ * @param &lt; T &gt; the type of result to be collected
+ *
+ * @author Adam J. Weigold &lt;adam@adamweigold.com&gt;
+ */
+class Lemming&lt;T&gt; {
+
+    /**
+     * An {@link ExceptionStrategy} that swallows all exceptions
+     */
+<span class="pc" id="L62">    public static final ExceptionStrategy QUIETLY_HANDLE_EXCEPTIONS = { } as ExceptionStrategy</span>
+
+    /**
+     * An {@link ExceptionStrategy} that rethrows the exception given to it
+     */
+<span class="pc" id="L67">    public static final ExceptionStrategy FAIL_ON_ANY_EXCEPTION = { throwable -&gt; throw throwable } as ExceptionStrategy</span>
+
+    private ExecutorService executorService
+
+    private Boolean shutdownExecutorService
+
+<span class="fc" id="L73">    private final List&lt;Callable&lt;T&gt;&gt; callables = []</span>
+
+    private Long timeout
+
+    private Integer threadCount
+
+    private String threadNameFormat = null
+
+    private Boolean daemon = null
+
+    private Integer priority = null
+
+    private ThreadFactory backingThreadFactory = null
+
+    private ExceptionStrategy exceptionStrategy
+
+    private ExceptionStrategy timeoutStrategy
+
+    /**
+     * Factory method to return a new Lemming instance
+     *
+     * @return a new Lemming instance
+     */
+    static &lt;T&gt; Lemming&lt;T&gt; makeLemming() {
+<span class="pc" id="L97">        new Lemming&lt;T&gt;()</span>
+    }
+
+    /**
+     * Overrides usage of the default executor service.  Furthermore setting this will also cause {@link #collect} to
+     * default to not shutting down the executor service if {@link #setShutdownExecutorService} is not invoked.
+     * &lt;p&gt;
+     * Setting this will cause settings to the following to be ignored as the {@link ThreadFactory} in the
+     * {@link ExecutorService} is not overwritten:
+     *     &lt;ul&gt;
+     *         &lt;li&gt;{@link #setThreadCount}&lt;/li&gt;
+     *         &lt;li&gt;{@link #setThreadNameFormat}&lt;/li&gt;
+     *         &lt;li&gt;{@link #setDaemon}&lt;/li&gt;
+     *         &lt;li&gt;{@link #setPriority}&lt;/li&gt;
+     *         &lt;li&gt;{@link #setThreadUncaughtExceptionHandler}&lt;/li&gt;
+     *         &lt;li&gt;{@link #setThreadFactory}&lt;/li&gt;
+     *     &lt;/ul&gt;
+     *
+     * @param executor the {@link ExecutorService} to use during collection.
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setExecutor(ExecutorService executor) {
+<span class="fc" id="L119">        this.executorService = executor</span>
+<span class="pc" id="L120">        this</span>
+    }
+
+    /**
+     * Sets if the {@link ExecutorService} used during {@link #collect} is shutdown.  Defaults to {@code true} if
+     * {@link #setExecutor} is not invoked, and {@code false} if it is.
+     *
+     * @param shutdown boolean setting for if {@link #collect} should shutdown the {@link ExecutorService}
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setShutdownExecutorService(boolean shutdown) {
+<span class="fc" id="L131">        this.shutdownExecutorService = shutdown</span>
+<span class="pc" id="L132">        this</span>
+    }
+
+    /**
+     * Adds an additional callable who's results will be collected.
+     *
+     * @param callable a callable that returns either &lt;T&gt; or Collection&lt;T&gt;
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; add(Callable callable) {
+<span class="fc" id="L142">        callables &lt;&lt; callable</span>
+<span class="pc" id="L143">        this</span>
+    }
+
+    /**
+     * Sets the maximum time to wait for execution of all {@link Callable}s by the executor service in
+     * {@link TimeUnit#MILLISECONDS}.
+     *
+     * @param the maximum time to wait
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setTimeout(long timeout) {
+<span class="fc" id="L154">        this.timeout = timeout</span>
+<span class="pc" id="L155">        this</span>
+    }
+
+    /**
+     * Sets the size of the thread pool to use when collecting.  Defaults to the number of {@link Callable}s added.
+     * This setting is ignored when using {@link #setExecutor}.
+     * @param threadCount the size of the thread pool to use when collecting
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setThreadCount(int threadCount) {
+<span class="fc" id="L165">        this.threadCount = threadCount</span>
+<span class="pc" id="L166">        this</span>
+    }
+
+    /**
+     * Sets the naming format to use when naming threads ({@link Thread#setName})
+     * which are created during {@link #collect}.  This setting is ignored when using {@link #setExecutor}.
+     *
+     * @param threadNameFormat a {@link String#format(String, Object...)}-compatible
+     *     format String, to which a unique integer (0, 1, etc.) will be supplied
+     *     as the single parameter. This integer will be unique to the built
+     *     instance of the ThreadFactory and will be assigned sequentially. For
+     *     example, {@code &quot;rpc-pool-%d&quot;} will generate thread names like
+     *     {@code &quot;rpc-pool-0&quot;}, {@code &quot;rpc-pool-1&quot;}, {@code &quot;rpc-pool-2&quot;}, etc.
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setThreadNameFormat(String threadNameFormat) {
+<span class="fc" id="L182">        String.format(threadNameFormat, 0) // fail fast if the format is bad or null</span>
+<span class="fc" id="L183">        this.threadNameFormat = threadNameFormat</span>
+<span class="pc" id="L184">        this</span>
+    }
+
+    /**
+     * Sets daemon or not for new threads created during {@link #collect}.  This setting is ignored when using
+     * {@link #setExecutor}.
+     *
+     * @param daemon whether or not new Threads created during {@link #collect}
+     *     will be daemon threads
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setDaemon(boolean daemon) {
+<span class="fc" id="L196">        this.daemon = daemon</span>
+<span class="pc" id="L197">        this</span>
+    }
+
+    /**
+     * Sets the priority for new threads created during {@link #collect}.  This setting is ignored when using
+     * {@link #setExecutor}.
+     *
+     * @param priority the priority for new Threads created with during
+     *     {@link #collect}
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setPriority(int priority) {
+        // Thread#setPriority() already checks for validity. These error messages
+        // are nicer though and will fail-fast.
+<span class="fc bfc" id="L211" title="All 2 branches covered.">        if (priority &lt; Thread.MIN_PRIORITY) {</span>
+<span class="fc" id="L212">            throw new IllegalArgumentException(&quot;Thread priority ($priority) must be &gt;= $Thread.MIN_PRIORITY&quot;)</span>
+        }
+<span class="fc bfc" id="L214" title="All 2 branches covered.">        if (priority &gt; Thread.MAX_PRIORITY) {</span>
+<span class="fc" id="L215">            throw new IllegalArgumentException(&quot;Thread priority ($priority) must be &lt;= $Thread.MAX_PRIORITY&quot;)</span>
+        }
+<span class="fc" id="L217">        this.priority = priority</span>
+<span class="pc" id="L218">        this</span>
+
+    }
+
+    /**
+     * Sets the backing {@link ThreadFactory} for new threads created during
+     * {@link #collect}. Threads will be created by invoking #newThread(Runnable) on
+     * this backing {@link ThreadFactory}.  This setting is ignored when using
+     * {@link #setExecutor}.
+     *
+     * @param backingThreadFactory the backing {@link ThreadFactory} which will
+     *     be delegated to during thread creation.
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setThreadFactory(ThreadFactory backingThreadFactory) {
+<span class="fc" id="L233">        this.backingThreadFactory = backingThreadFactory</span>
+<span class="pc" id="L234">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will be invoked for any {@link Callable}s
+     * that abort due to throwing an Exception.  Note that any exceptions thrown from this
+     * handler will cancel all unfinished {@link Callable}s.
+     *
+     * Defaults to {@link Lemming#QUIETLY_HANDLE_EXCEPTIONS}
+     *
+     * @param exceptionStrategy the exception handler that for any {@link ExecutionException}
+     *     received from invoking a {@link Callable}
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setExceptionStrategy(ExceptionStrategy exceptionStrategy) {
+<span class="fc" id="L249">        this.exceptionStrategy = exceptionStrategy</span>
+<span class="pc" id="L250">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will rethrow any Exception from an aborted {@link Callable}
+     * which will cancel all unfinished {@link Callable}s and will rethrown the offending
+     * {@link ExecutionException}
+     *
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; failOnAnyException() {
+<span class="fc" id="L261">        this.exceptionStrategy = FAIL_ON_ANY_EXCEPTION</span>
+<span class="pc" id="L262">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will swallow any Exception from an aborted {@link Callable}
+     * which will allow all unfinished {@link Callable}s to continue to return results.
+     *
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; quietlyHandleAllExeptions() {
+<span class="fc" id="L272">        this.exceptionStrategy = QUIETLY_HANDLE_EXCEPTIONS</span>
+<span class="pc" id="L273">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will be invoked for any {@link Callable}s
+     * that are cancelled due to timing out.
+     *
+     * Defaults to {@link Lemming#QUIETLY_HANDLE_EXCEPTIONS}
+     *
+     * @param exceptionStrategy the exception handler that for any {@link Callable}
+     *     that times out
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; setTimeoutStrategy(ExceptionStrategy timeoutStrategy) {
+<span class="fc" id="L287">        this.timeoutStrategy = timeoutStrategy</span>
+<span class="pc" id="L288">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will rethrow from a timed out {@link Callable},
+     * effectively stopping any results to be returned from {@link #collect}.
+     *
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; failOnAnyTimeout() {
+<span class="fc" id="L298">        this.timeoutStrategy = FAIL_ON_ANY_EXCEPTION</span>
+<span class="pc" id="L299">        this</span>
+    }
+
+    /**
+     * Sets an {@link ExceptionStrategy} that will swallow from a timed out {@link Callable},
+     * effectively allowing any finished results to be returned from {@link #collect}.
+     *
+     * @return this for the builder pattern
+     */
+    Lemming&lt;T&gt; quietlyHandleAllTimeouts() {
+<span class="fc" id="L309">        this.timeoutStrategy = QUIETLY_HANDLE_EXCEPTIONS</span>
+<span class="pc" id="L310">        this</span>
+    }
+
+    /**
+     * Invokes all the {@link Callable}s added and returns all the results as a collection.
+     *
+     * @return a collection containing all the results from completed {@link Callable}s
+     */
+    Collection&lt;T&gt; collect() {
+<span class="fc bfc" id="L319" title="All 2 branches covered.">        final boolean SHUTDOWN_EXECUTOR_SERVICE = (this.shutdownExecutorService != null) ?</span>
+<span class="fc" id="L320">                this.shutdownExecutorService : (this.executorService == null)</span>
+<span class="pc bpc" id="L321" title="5 of 10 branches missed.">        final ExecutorService EXECUTOR_SERVICE = (this.executorService != null) ?</span>
+<span class="pc" id="L322">                this.executorService : initExecutorService()</span>
+<span class="fc bfc" id="L323" title="All 2 branches covered.">        final ExceptionStrategy EXCEPTION_STRATEGY = (this.exceptionStrategy != null) ?</span>
+                this.exceptionStrategy : QUIETLY_HANDLE_EXCEPTIONS
+<span class="fc bfc" id="L325" title="All 2 branches covered.">        final ExceptionStrategy TIMEOUT_STRATEGY = (this.timeoutStrategy != null) ?</span>
+                this.timeoutStrategy : QUIETLY_HANDLE_EXCEPTIONS
+<span class="fc" id="L327">        List&lt;Future&gt; futures</span>
+        try {
+<span class="fc" id="L329">            def results = []</span>
+<span class="fc bfc" id="L330" title="All 2 branches covered.">            if (timeout == null) {</span>
+<span class="fc" id="L331">                futures = EXECUTOR_SERVICE.invokeAll(callables)</span>
+            } else {
+<span class="fc" id="L333">                futures = EXECUTOR_SERVICE.invokeAll(callables, timeout, TimeUnit.MILLISECONDS)</span>
+            }
+<span class="fc bfc" id="L335" title="All 2 branches covered.">            for (Future future : futures) {</span>
+                try {
+<span class="fc" id="L337">                    def result = future.get()</span>
+<span class="fc bfc" id="L338" title="All 2 branches covered.">                    if (result instanceof Collection) {</span>
+<span class="fc" id="L339">                        results.addAll(result)</span>
+                    } else {
+<span class="fc" id="L341">                        results &lt;&lt; result</span>
+                    }
+                } catch (ExecutionException e) {
+<span class="fc" id="L344">                    EXCEPTION_STRATEGY.handle(e)</span>
+                } catch (CancellationException e) {
+<span class="pc" id="L346">                    TIMEOUT_STRATEGY.handle(e)</span>
+                } catch (InterruptedException e) {
+<span class="pc" id="L348">                    TIMEOUT_STRATEGY.handle(e)</span>
+                }
+            }
+<span class="fc" id="L351">            results</span>
+        } finally {
+<span class="pc bpc" id="L353" title="2 of 4 branches missed.">            if (futures != null) {</span>
+<span class="pc" id="L354">                futures.each { future -&gt; future.cancel(true) }</span>
+            }
+<span class="pc bpc" id="L356" title="1 of 4 branches missed.">            if (SHUTDOWN_EXECUTOR_SERVICE) {</span>
+<span class="pc" id="L357">                EXECUTOR_SERVICE.shutdown()</span>
+            }
+        }
+    }
+
+    @SuppressWarnings('UnnecessaryGetter')
+    private ExecutorService initExecutorService() {
+<span class="fc bfc" id="L364" title="All 2 branches covered.">        final int THREAD_COUNT = (this.threadCount != null) ? this.threadCount : callables.size()</span>
+<span class="fc" id="L365">        final String NAME_FORMAT = this.threadNameFormat</span>
+<span class="fc" id="L366">        final Boolean DAEMON = this.daemon</span>
+<span class="fc" id="L367">        final Integer PRIORITY = this.priority</span>
+        final ThreadFactory BACKING_THREAD_FACTORY =
+<span class="fc bfc" id="L369" title="All 2 branches covered.">                (this.backingThreadFactory != null) ? this.backingThreadFactory : Executors.defaultThreadFactory()</span>
+<span class="fc bfc" id="L370" title="All 2 branches covered.">        final AtomicLong COUNT = (NAME_FORMAT != null) ? new AtomicLong(0) : null</span>
+<span class="pc" id="L371">        Executors.newFixedThreadPool(THREAD_COUNT, { runnable -&gt;</span>
+<span class="fc" id="L372">            Thread thread = BACKING_THREAD_FACTORY.newThread(runnable)</span>
+<span class="fc bfc" id="L373" title="All 2 branches covered.">            if (NAME_FORMAT != null) {</span>
+<span class="fc" id="L374">                thread.setName(String.format(NAME_FORMAT, COUNT.getAndIncrement()))</span>
+            }
+<span class="fc bfc" id="L376" title="All 2 branches covered.">            if (DAEMON != null) {</span>
+<span class="fc" id="L377">                thread.setDaemon(DAEMON)</span>
+            }
+<span class="fc bfc" id="L379" title="All 2 branches covered.">            if (PRIORITY != null) {</span>
+<span class="fc" id="L380">                thread.setPriority(PRIORITY)</span>
+            }
+<span class="pc" id="L382">            thread</span>
+        } as ThreadFactory )
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.1.201405082137</span></div></body></html>
