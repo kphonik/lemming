@@ -1,6 +1,7 @@
 #!/bin/bash
 cp -Rvf build/resources/site gh-pages
 cd gh-pages
+git init
 git config user.name "travis-ci"
 git config user.email "travis@travis-ci.org"
 git add .
